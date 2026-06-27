@@ -1,38 +1,70 @@
 from gurobipy import *
 import numpy as np
+from dataclasses import dataclass
+
+FORMULA_SCALING_FACTOR = 0.001
+
+BASE_VOLTAGE_KV = 12.66
+VOLTAGE_UPPER_LIMIT = 1.10
+VOLTAGE_LOWER_LIMIT = 0.90
+
+P_FLOW_UPPER_LIMIT = 5000
+
+GENERATOR_SECOND_STAGE_ADJUSTMENT_RATIO = 0.4
+ESS_MIN_SOC_RATIO = 0.2
+
+POWER_FACTOR = 0.9
+
+BUDGET_BASE_COST = 223458.23
+BUDGET_DEVIATION_RATIO = 1.3
+
+SECOND_STAGE_GENERATION_PRICE_RATIO = 1.5
+SECOND_STAGE_IMPORT_PRICE_RATIO = 1.4
+SECOND_STAGE_EXPORT_PRICE_RATIO = 0.8
+
+@dataclass
+class OptimalResult:
+    theta_u: np.ndarray
+    total_cost: float
+    first_stage_cost: float
+    G_p: np.ndarray
+    ESS_pch: np.ndarray
+    ESS_pdis: np.ndarray
+    ESS_u: np.ndarray
+    P_flow: np.ndarray
 
 
 def unpack_system_data(system_data):
-    A = system_data[1]
-    R_prime = system_data[2] * 0.001
-    X_prime = system_data[3] * 0.001
-    P_load = system_data[4]
+    A = system_data.A
+    R_prime = system_data.R_prime * FORMULA_SCALING_FACTOR
+    X_prime = system_data.X_prime * FORMULA_SCALING_FACTOR
+    P_load = system_data.P_load
 
     return A, R_prime, X_prime, P_load
 
 
 def unpack_ders_data(ders_data, T):
-    G_node = ders_data[0]
+    G_node = ders_data.G_node
 
-    G_pmax = np.tile(ders_data[1], (1, T))
-    G_pmin = np.tile(ders_data[2], (1, T))
-    G_qmax = np.tile(ders_data[3], (1, T))
-    G_qmin = np.tile(ders_data[4], (1, T))
+    G_pmax = np.tile(ders_data.G_pmax, (1, T))
+    G_pmin = np.tile(ders_data.G_pmin, (1, T))
+    G_qmax = np.tile(ders_data.G_qmax, (1, T))
+    G_qmin = np.tile(ders_data.G_qmin, (1, T))
 
-    G_cost = ders_data[5]
-    electricity_price = ders_data[6]
+    G_cost = ders_data.G_cost
+    electricity_price = ders_data.electricity_price
 
-    PV_node = ders_data[7]
-    PV = ders_data[8]
+    PV_node = ders_data.PV_node
+    PV = ders_data.PV
 
-    G_up_limit = ders_data[9]
-    G_dn_limit = ders_data[10]
+    G_up_limit = ders_data.G_up_limit
+    G_dn_limit = ders_data.G_dn_limit
 
-    ESS_node = ders_data[11]
-    ESS_pmax = ders_data[12]
-    ESS_capacity = ders_data[13]
-    ESS_Eini = ders_data[14]
-    ESS_eff = ders_data[15]
+    ESS_node = ders_data.ESS_node
+    ESS_pmax = ders_data.ESS_pmax
+    ESS_capacity = ders_data.ESS_capacity
+    ESS_Eini = ders_data.ESS_Eini
+    ESS_eff = ders_data.ESS_eff
 
     return (
         G_node, G_pmax, G_pmin, G_qmax, G_qmin,
@@ -42,16 +74,15 @@ def unpack_ders_data(ders_data, T):
         ESS_node, ESS_pmax, ESS_capacity, ESS_Eini, ESS_eff
     )
 
-
 def build_opt_model_limits(num_nodes):
     num_nodes = num_nodes-1 #不需要计算首节点
 
-    v0 = 12.66*12.66
+    v0 = BASE_VOLTAGE_KV * BASE_VOLTAGE_KV
 
-    v_up = 1.10 **2 * v0
-    v_low = 0.90 **2 * v0
+    v_up = VOLTAGE_UPPER_LIMIT ** 2 * v0
+    v_low = VOLTAGE_LOWER_LIMIT ** 2 * v0
 
-    P_flow_up = 5000
+    P_flow_up = P_FLOW_UPPER_LIMIT
     P_flow_low = -P_flow_up
 
     return num_nodes, v0, v_up, v_low, P_flow_up, P_flow_low
@@ -68,7 +99,7 @@ def create_generator_variables(m, T, G_node, G_pmin, G_pmax, G_qmin, G_qmax):
     G_p = m.addMVar((len(G_node), T), lb=G_pmin, ub=G_pmax, vtype=GRB.CONTINUOUS, name="G_p")
     G_q = m.addMVar((len(G_node), T), lb=G_qmin, ub=G_qmax, vtype=GRB.CONTINUOUS, name="G_q")
 
-    G_p_cor = m.addMVar((len(G_node), T), lb=-G_pmax * 0.4, ub=G_pmax * 0.4, vtype=GRB.CONTINUOUS, name="G_p_cor")
+    G_p_cor = m.addMVar((len(G_node), T), lb=-G_pmax * GENERATOR_SECOND_STAGE_ADJUSTMENT_RATIO, ub=G_pmax * GENERATOR_SECOND_STAGE_ADJUSTMENT_RATIO, vtype=GRB.CONTINUOUS, name="G_p_cor")
     G_p_cor_abs = m.addMVar((len(G_node), T), lb=-GRB.INFINITY, ub=GRB.INFINITY, vtype=GRB.CONTINUOUS, name="G_p_cor_abs")
     G_p_reg = m.addMVar((len(G_node), T), lb=G_pmin, ub=G_pmax, vtype=GRB.CONTINUOUS, name="G_p_reg")
 
@@ -78,7 +109,7 @@ def create_generator_variables(m, T, G_node, G_pmin, G_pmax, G_qmin, G_qmax):
 def create_ess_variables(m, T, ESS_node, ESS_pmax, ESS_capacity):
     ESS_pch = m.addMVar((len(ESS_node), T), lb=0, vtype=GRB.CONTINUOUS, name="ESS_ch")
     ESS_pdis = m.addMVar((len(ESS_node), T), lb=0, vtype=GRB.CONTINUOUS, name="ESS_dis")
-    ESS_E = m.addMVar((len(ESS_node), T), lb=ESS_capacity * 0.2, ub=ESS_capacity, vtype=GRB.CONTINUOUS, name="ESS_E")
+    ESS_E = m.addMVar((len(ESS_node), T), lb=ESS_capacity * ESS_MIN_SOC_RATIO, ub=ESS_capacity, vtype=GRB.CONTINUOUS, name="ESS_E")
     ESS_u = m.addMVar((len(ESS_node), T), vtype=GRB.BINARY, name="ESS_u")
 
     return ESS_pch, ESS_pdis, ESS_E, ESS_u
@@ -344,7 +375,7 @@ def add_uncertainty_realization_constraints(
     )
 
     m.addConstr(
-        Q_load == P_load_real * 0.9,
+        Q_load == P_load_real * POWER_FACTOR,
         name="Reactive_Load_rule"
     )
 
@@ -365,10 +396,10 @@ def build_total_cost(
 ):
     total_cost = (
             quicksum(G_p[:, t] for t in range(T)) @ G_cost
-            + quicksum(G_p_cor_abs[:, t] for t in range(T)) @ G_cost * 1.5
+            + quicksum(G_p_cor_abs[:, t] for t in range(T)) @ G_cost * SECOND_STAGE_GENERATION_PRICE_RATIO
             + quicksum(P_flow[0, t] * electricity_price[t] for t in range(T))
-            + quicksum(flow_pos_auxi[t] * electricity_price[t] * 1.4 for t in range(T))
-            - quicksum(flow_neg_auxi[t] * electricity_price[t] * 0.8 for t in range(T))
+            + quicksum(flow_pos_auxi[t] * electricity_price[t] * SECOND_STAGE_IMPORT_PRICE_RATIO for t in range(T))
+            - quicksum(flow_neg_auxi[t] * electricity_price[t] * SECOND_STAGE_EXPORT_PRICE_RATIO for t in range(T))
     )
 
     return total_cost
@@ -376,7 +407,7 @@ def build_total_cost(
 
 def add_budget_constraint(m, total_cost):
     m.addConstr(
-        total_cost <= 223458.23 * 1.3,
+        total_cost <= BUDGET_BASE_COST * BUDGET_DEVIATION_RATIO,
         name="Budget_limit"
     )
 
@@ -417,37 +448,39 @@ def solve_and_extract_results(
 ):
     m.optimize()
 
-    if m.status == GRB.OPTIMAL:
-        global G_p_x, ESS_pch_x, ESS_pdis_x, ESS_u_x, P_flow_x
+    if m.status != GRB.OPTIMAL:
+        return None
 
-        G_p_x = G_p.x
-        ESS_pch_x = ESS_pch.x
-        ESS_pdis_x = ESS_pdis.x
-        ESS_u_x = ESS_u.x
-        P_flow_x = P_flow.x
-
-        total_cost_spent = (
+    total_cost_spent = (
             quicksum(G_p.x[:, t] for t in range(T)) @ G_cost
-            + quicksum(G_p_cor_abs.x[:, t] for t in range(T)) @ G_cost * 1.5
+            + quicksum(G_p_cor_abs.x[:, t] for t in range(T)) @ G_cost * SECOND_STAGE_GENERATION_PRICE_RATIO
             + quicksum(P_flow.x[0, t] * electricity_price[t] for t in range(T))
-            + quicksum(flow_pos_auxi.x[t] * electricity_price[t] * 1.4 for t in range(T))
-            - quicksum(flow_neg_auxi.x[t] * electricity_price[t] * 0.8 for t in range(T))
-        )
+            + quicksum(flow_pos_auxi.x[t] * electricity_price[t] * SECOND_STAGE_IMPORT_PRICE_RATIO for t in range(T))
+            - quicksum(flow_neg_auxi.x[t] * electricity_price[t] * SECOND_STAGE_EXPORT_PRICE_RATIO for t in range(T))
+    )
 
-        first_stage_cost = (
+    first_stage_cost = (
             quicksum(G_p.x[:, t] for t in range(T)) @ G_cost
             + quicksum(P_flow.x[0, t] * electricity_price[t] for t in range(T))
-        )
+    )
 
-        return theta_u.x, round(total_cost_spent.getValue(), 2), round(first_stage_cost.getValue(), 2)
+    optimal_result = OptimalResult(
+        theta_u=theta_u.x,
+        total_cost=round(total_cost_spent.getValue(), 2),
+        first_stage_cost=round(first_stage_cost.getValue(), 2),
+        G_p=G_p.x,
+        ESS_pch=ESS_pch.x,
+        ESS_pdis=ESS_pdis.x,
+        ESS_u=ESS_u.x,
+        P_flow=P_flow.x,
+    )
 
-    else:
-        return None, None
+    return optimal_result
 
 
-def economic_dispatch_IGDT(System_Data, DERs_Data, num_nodes, T, P_load_Uset, PV_Uset, iter, partition_num, α_ini):
+def economic_dispatch_IGDT(system_data, ders_data, num_nodes, T, P_load_Uset, PV_Uset, iter, partition_num, α_ini):
 ## ---------  Parameters --------------
-    A, R_prime, X_prime, P_load = unpack_system_data(System_Data)
+    A, R_prime, X_prime, P_load = unpack_system_data(system_data)
 
     (
         G_node, G_pmax, G_pmin, G_qmax, G_qmin,
@@ -455,7 +488,7 @@ def economic_dispatch_IGDT(System_Data, DERs_Data, num_nodes, T, P_load_Uset, PV
         PV_node, PV,
         G_up_limit, G_dn_limit,
         ESS_node, ESS_pmax, ESS_capacity, ESS_Eini, ESS_eff
-    ) = unpack_ders_data(DERs_Data, T)
+    ) = unpack_ders_data(ders_data, T)
 
     num_nodes, v0, v_up, v_low, P_flow_up, P_flow_low = build_opt_model_limits(num_nodes)
 
@@ -565,7 +598,8 @@ def economic_dispatch_IGDT(System_Data, DERs_Data, num_nodes, T, P_load_Uset, PV
 ## ---------  Objective function --------------
     set_igdt_objective(m, theta)
 
-    return solve_and_extract_results(
+
+    optimal_result = solve_and_extract_results(
         m, T,
         G_p, G_p_cor_abs,
         ESS_pch, ESS_pdis, ESS_u,
@@ -575,6 +609,4 @@ def economic_dispatch_IGDT(System_Data, DERs_Data, num_nodes, T, P_load_Uset, PV
         theta_u
     )
 
-def get_decision_variables():
-    decision_variables = [G_p_x, ESS_pch_x, ESS_pdis_x, ESS_u_x, P_flow_x]
-    return decision_variables
+    return optimal_result
