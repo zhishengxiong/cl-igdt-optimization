@@ -31,14 +31,18 @@ if __name__=="__main__":
     while iter <= accuracy:
         start_time = time.time()
 
-        #Load the Demand/PV uncertainty set
+        #Load Demand uncertainty set
         try:
             with np.load(data_dir / f'Bus69_P_load_Uset_{α_ini}.npz') as data:
                 P_load_Uset = {float(key): data[key] for key in data}
+        except:
+            P_load_Uset = Demand.CI_Demand(iter, partition_num, T, α_ini)
+
+        # Load PV uncertainty set
+        try:
             with np.load(data_dir / f'Bus69_PV_Uset_{α_ini}.npz') as data:
                 PV_Uset = {float(key): data[key] for key in data}
         except:
-            P_load_Uset = Demand.CI_Demand(iter, partition_num, T, α_ini)
             PV_Uset = PV.CI_PV(iter, partition_num, T, α_ini, len(DERs_Data[7]))
 
         # Construct the optimization model
