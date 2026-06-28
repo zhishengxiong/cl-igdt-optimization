@@ -1,6 +1,8 @@
-import pandas as pd
-import numpy as np
 from dataclasses import dataclass
+
+import numpy as np
+import pandas as pd
+
 
 GENERATORS_SHEET = "Generators"
 ESS_SHEET = "ESS"
@@ -57,20 +59,32 @@ def read_ders_data(ders_file):
 
 
 def build_generator_data(raw_generators):
-    G_node = [raw_generators.loc[i, NODE_COLUMN] for i in raw_generators.index]
+    G_node = raw_generators[NODE_COLUMN].tolist()
+
     G_pmax = raw_generators[PMAX_COLUMN].to_numpy().reshape(-1, 1)
     G_pmin = raw_generators[PMIN_COLUMN].to_numpy().reshape(-1, 1)
     G_qmax = raw_generators[QMAX_COLUMN].to_numpy().reshape(-1, 1)
     G_qmin = raw_generators[QMIN_COLUMN].to_numpy().reshape(-1, 1)
+
     G_cost = raw_generators[COST_COLUMN].to_numpy()
     G_up_limit = raw_generators[RU_COLUMN].to_numpy()
     G_dn_limit = raw_generators[RD_COLUMN].to_numpy()
 
-    return G_node, G_pmax, G_pmin, G_qmax, G_qmin, G_cost, G_up_limit, G_dn_limit
+    return (
+        G_node,
+        G_pmax,
+        G_pmin,
+        G_qmax,
+        G_qmin,
+        G_cost,
+        G_up_limit,
+        G_dn_limit,
+    )
 
 
 def build_ess_data(raw_ess):
-    ESS_node = [raw_ess.loc[i, NODE_COLUMN] for i in raw_ess.index]
+    ESS_node = raw_ess[NODE_COLUMN].tolist()
+
     ESS_pmax = raw_ess[POWER_COLUMN].to_numpy().reshape(-1, 1)
     ESS_capacity = raw_ess[ENERGY_COLUMN].to_numpy().reshape(-1, 1)
     ESS_Eini = raw_ess[EINI_COLUMN].to_numpy().reshape(-1, 1)
@@ -80,13 +94,16 @@ def build_ess_data(raw_ess):
 
 
 def build_price_profile(raw_prices, T):
-    electricity_price = np.round(raw_prices.loc[:T - 1, PRICE_COLUMN].to_numpy(), 2)
+    electricity_price = np.round(
+        raw_prices.loc[:T - 1, PRICE_COLUMN].to_numpy(),
+        2,
+    )
 
     return electricity_price
 
 
 def build_pv_data(raw_pv_location, raw_pv_predictive, T):
-    PV_node = [raw_pv_location.loc[i, NODE_COLUMN] for i in raw_pv_location.index]
+    PV_node = raw_pv_location[NODE_COLUMN].tolist()
 
     PV = raw_pv_predictive[PV_COLUMN][:T].to_numpy()
     PV = np.tile(PV, (len(PV_node), 1))
@@ -95,9 +112,24 @@ def build_pv_data(raw_pv_location, raw_pv_predictive, T):
 
 
 def build_ders_data(ders_file, T):
-    raw_generators, raw_ess, raw_prices, raw_pv_location, raw_pv_predictive = read_ders_data(ders_file)
+    (
+        raw_generators,
+        raw_ess,
+        raw_prices,
+        raw_pv_location,
+        raw_pv_predictive,
+    ) = read_ders_data(ders_file)
 
-    G_node, G_pmax, G_pmin, G_qmax, G_qmin, G_cost, G_up_limit, G_dn_limit = build_generator_data(raw_generators)
+    (
+        G_node,
+        G_pmax,
+        G_pmin,
+        G_qmax,
+        G_qmin,
+        G_cost,
+        G_up_limit,
+        G_dn_limit,
+    ) = build_generator_data(raw_generators)
 
     ESS_node, ESS_pmax, ESS_capacity, ESS_Eini, ESS_eff = build_ess_data(raw_ess)
 

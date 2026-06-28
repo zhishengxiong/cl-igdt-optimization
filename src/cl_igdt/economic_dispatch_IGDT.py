@@ -1,26 +1,8 @@
-from gurobipy import *
-import numpy as np
 from dataclasses import dataclass
 
-FORMULA_SCALING_FACTOR = 0.001
+import numpy as np
+from gurobipy import GRB, Model, quicksum
 
-BASE_VOLTAGE_KV = 12.66
-VOLTAGE_UPPER_LIMIT = 1.10
-VOLTAGE_LOWER_LIMIT = 0.90
-
-P_FLOW_UPPER_LIMIT = 5000
-
-GENERATOR_SECOND_STAGE_ADJUSTMENT_RATIO = 0.4
-ESS_MIN_SOC_RATIO = 0.2
-
-POWER_FACTOR = 0.9
-
-BUDGET_BASE_COST = 223458.23
-BUDGET_DEVIATION_RATIO = 1.3
-
-SECOND_STAGE_GENERATION_PRICE_RATIO = 1.5
-SECOND_STAGE_IMPORT_PRICE_RATIO = 1.4
-SECOND_STAGE_EXPORT_PRICE_RATIO = 0.8
 
 @dataclass
 class OptimalResult:
@@ -34,10 +16,10 @@ class OptimalResult:
     P_flow: np.ndarray
 
 
-def unpack_system_data(system_data):
+def unpack_system_data(system_data, optimization_config):
     A = system_data.A
-    R_prime = system_data.R_prime * FORMULA_SCALING_FACTOR
-    X_prime = system_data.X_prime * FORMULA_SCALING_FACTOR
+    R_prime = system_data.R_prime * 0.001
+    X_prime = system_data.X_prime * 0.001
     P_load = system_data.P_load
 
     return A, R_prime, X_prime, P_load
@@ -74,18 +56,23 @@ def unpack_ders_data(ders_data, T):
         ESS_node, ESS_pmax, ESS_capacity, ESS_Eini, ESS_eff
     )
 
-def build_opt_model_limits(num_nodes):
-    num_nodes = num_nodes-1 #不需要计算首节点
 
-    v0 = BASE_VOLTAGE_KV * BASE_VOLTAGE_KV
+def build_opt_model_limits(num_nodes, network_config, optimization_config):
+    num_non_slack_nodes = num_nodes - 1
 
-    v_up = VOLTAGE_UPPER_LIMIT ** 2 * v0
-    v_low = VOLTAGE_LOWER_LIMIT ** 2 * v0
+    base_voltage_kv = network_config["base_voltage_kv"]
+    voltage_upper_limit = optimization_config["voltage_upper_limit"]
+    voltage_lower_limit = optimization_config["voltage_lower_limit"]
+    P_flow_up = optimization_config["p_flow_upper_limit"]
 
-    P_flow_up = P_FLOW_UPPER_LIMIT
+    v0 = base_voltage_kv * base_voltage_kv
+
+    v_up = voltage_upper_limit ** 2 * v0
+    v_low = voltage_lower_limit ** 2 * v0
+
     P_flow_low = -P_flow_up
 
-    return num_nodes, v0, v_up, v_low, P_flow_up, P_flow_low
+    return num_non_slack_nodes, v0, v_up, v_low, P_flow_up, P_flow_low
 
 
 def create_opt_model():
@@ -95,42 +82,52 @@ def create_opt_model():
     return m
 
 
-def create_generator_variables(m, T, G_node, G_pmin, G_pmax, G_qmin, G_qmax):
+def create_generator_variables(m, T, G_node, G_pmin, G_pmax, G_qmin, G_qmax, optimization_config):
+    generator_second_stage_adjustment_ratio = optimization_config["generator_second_stage_adjustment_ratio"]
+
     G_p = m.addMVar((len(G_node), T), lb=G_pmin, ub=G_pmax, vtype=GRB.CONTINUOUS, name="G_p")
     G_q = m.addMVar((len(G_node), T), lb=G_qmin, ub=G_qmax, vtype=GRB.CONTINUOUS, name="G_q")
 
-    G_p_cor = m.addMVar((len(G_node), T), lb=-G_pmax * GENERATOR_SECOND_STAGE_ADJUSTMENT_RATIO, ub=G_pmax * GENERATOR_SECOND_STAGE_ADJUSTMENT_RATIO, vtype=GRB.CONTINUOUS, name="G_p_cor")
+    G_p_cor = m.addMVar(
+        (len(G_node), T),
+        lb=-G_pmax * generator_second_stage_adjustment_ratio,
+        ub=G_pmax * generator_second_stage_adjustment_ratio,
+        vtype=GRB.CONTINUOUS,
+        name="G_p_cor",
+    )
     G_p_cor_abs = m.addMVar((len(G_node), T), lb=-GRB.INFINITY, ub=GRB.INFINITY, vtype=GRB.CONTINUOUS, name="G_p_cor_abs")
     G_p_reg = m.addMVar((len(G_node), T), lb=G_pmin, ub=G_pmax, vtype=GRB.CONTINUOUS, name="G_p_reg")
 
     return G_p, G_q, G_p_cor, G_p_cor_abs, G_p_reg
 
 
-def create_ess_variables(m, T, ESS_node, ESS_pmax, ESS_capacity):
+def create_ess_variables(m, T, ESS_node, ESS_pmax, ESS_capacity, optimization_config):
+    ess_min_soc_ratio = optimization_config["ess_min_soc_ratio"]
+
     ESS_pch = m.addMVar((len(ESS_node), T), lb=0, vtype=GRB.CONTINUOUS, name="ESS_ch")
     ESS_pdis = m.addMVar((len(ESS_node), T), lb=0, vtype=GRB.CONTINUOUS, name="ESS_dis")
-    ESS_E = m.addMVar((len(ESS_node), T), lb=ESS_capacity * ESS_MIN_SOC_RATIO, ub=ESS_capacity, vtype=GRB.CONTINUOUS, name="ESS_E")
+    ESS_E = m.addMVar((len(ESS_node), T), lb=ESS_capacity * ess_min_soc_ratio, ub=ESS_capacity, vtype=GRB.CONTINUOUS, name="ESS_E")
     ESS_u = m.addMVar((len(ESS_node), T), vtype=GRB.BINARY, name="ESS_u")
 
     return ESS_pch, ESS_pdis, ESS_E, ESS_u
 
 
-def create_network_variables(m, num_nodes, T, v_low, v_up, P_flow_low, P_flow_up):
-    P_flow = m.addMVar((num_nodes, T), lb=P_flow_low, ub=P_flow_up, name="P_flow")
-    P_flow_2S = m.addMVar((num_nodes, T), lb=P_flow_low, ub=P_flow_up, name="P_flow_2S")
-    Q_flow = m.addMVar((num_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, name="Q_flow")
-    v = m.addMVar((num_nodes, T), lb=v_low, ub=v_up, name="v")
+def create_network_variables(m, num_non_slack_nodes, T, v_low, v_up, P_flow_low, P_flow_up):
+    P_flow = m.addMVar((num_non_slack_nodes, T), lb=P_flow_low, ub=P_flow_up, name="P_flow")
+    P_flow_2S = m.addMVar((num_non_slack_nodes, T), lb=P_flow_low, ub=P_flow_up, name="P_flow_2S")
+    Q_flow = m.addMVar((num_non_slack_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, name="Q_flow")
+    v = m.addMVar((num_non_slack_nodes, T), lb=v_low, ub=v_up, name="v")
 
-    P_net = m.addMVar((num_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, name="P_net")
-    P_net_2S = m.addMVar((num_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, name="P_net_2S")
-    Q_net = m.addMVar((num_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, name="Q_net")
+    P_net = m.addMVar((num_non_slack_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, name="P_net")
+    P_net_2S = m.addMVar((num_non_slack_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, name="P_net_2S")
+    Q_net = m.addMVar((num_non_slack_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, name="Q_net")
 
     return P_flow, P_flow_2S, Q_flow, v, P_net, P_net_2S, Q_net
 
 
-def create_uncertain_realization_variables(m, num_nodes, T, PV_node):
-    P_load_real = m.addMVar((num_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, vtype=GRB.CONTINUOUS, name="P_load_real")
-    Q_load = m.addMVar((num_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, vtype=GRB.CONTINUOUS, name="Q_load")
+def create_uncertain_realization_variables(m, num_non_slack_nodes, T, PV_node):
+    P_load_real = m.addMVar((num_non_slack_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, vtype=GRB.CONTINUOUS, name="P_load_real")
+    Q_load = m.addMVar((num_non_slack_nodes, T), lb=-GRB.INFINITY, ub=GRB.INFINITY, vtype=GRB.CONTINUOUS, name="Q_load")
     PV_real = m.addMVar((len(PV_node), T), lb=-GRB.INFINITY, ub=GRB.INFINITY, vtype=GRB.CONTINUOUS, name="PV_real")
 
     return P_load_real, Q_load, PV_real
@@ -193,13 +190,13 @@ def add_first_stage_ess_constraints(
 
 
 def add_first_stage_active_power_balance_constraints(
-        m, num_nodes, T,
+        m, num_non_slack_nodes, T,
         G_node, PV_node, ESS_node,
         P_load, PV,
         G_p, ESS_pdis, ESS_pch,
         P_net, P_flow, A
 ):
-    for n in range(num_nodes):
+    for n in range(num_non_slack_nodes):
         if n + 1 in G_node:
             for t in range(T):
                 i = G_node.index(n + 1)
@@ -259,14 +256,14 @@ def add_second_stage_generator_constraints(
 
 
 def add_second_stage_net_loads_constraints(
-        m, num_nodes, T,
+        m, num_non_slack_nodes, T,
         G_node, PV_node, ESS_node,
         P_load_real, Q_load, PV_real,
         G_p_reg, G_q,
         ESS_pdis, ESS_pch,
         P_net_2S, Q_net
 ):
-    for n in range(num_nodes):
+    for n in range(num_non_slack_nodes):
         if n + 1 in G_node:
             for t in range(T):
                 i = G_node.index(n + 1)
@@ -337,17 +334,17 @@ def add_second_stage_network_constraints(
 
 
 def add_igdt_partition_constraints(
-        m, partition_num, iter, α_ini,
+        m, partition_num, iteration, alpha_ini,
         theta, theta_s, theta_u
 ):
     for i in range(partition_num):
         m.addConstr(
-            theta_s[i] >= (α_ini + 10 ** (-iter) * i) * theta_u[i],
-            name=f"theta_s_limt1_{i}"
+            theta_s[i] >= (alpha_ini + 10 ** (-iteration) * i) * theta_u[i],
+            name=f"theta_s_limit1_{i}"
         )
         m.addConstr(
-            theta_s[i] <= (α_ini + 10 ** (-iter) * (i + 1)) * theta_u[i],
-            name=f"theta_s_limt2_{i}"
+            theta_s[i] <= (alpha_ini + 10 ** (-iteration) * (i + 1)) * theta_u[i],
+            name=f"theta_s_limit2_{i}"
         )
 
     m.addConstr(
@@ -361,27 +358,29 @@ def add_igdt_partition_constraints(
 
 
 def add_uncertainty_realization_constraints(
-        m, partition_num, iter, α_ini,
+        m, partition_num, iteration, alpha_ini,
         P_load_Uset, PV_Uset,
         P_load_real, Q_load, PV_real,
-        theta_u
+        theta_u, optimization_config
 ):
+    power_factor = optimization_config["power_factor"]
+
     m.addConstr(
         P_load_real == quicksum(
-            P_load_Uset[round(10 ** (-iter) * i + α_ini, iter)] * theta_u[i]
+            P_load_Uset[round(10 ** (-iteration) * i + alpha_ini, iteration)] * theta_u[i]
             for i in range(partition_num)
         ),
         name="Load_Uset_rule"
     )
 
     m.addConstr(
-        Q_load == P_load_real * POWER_FACTOR,
+        Q_load == P_load_real * power_factor,
         name="Reactive_Load_rule"
     )
 
     m.addConstr(
         PV_real == quicksum(
-            PV_Uset[round(10 ** (-iter) * i + α_ini, iter)] * theta_u[i]
+            PV_Uset[round(10 ** (-iteration) * i + alpha_ini, iteration)] * theta_u[i]
             for i in range(partition_num)
         ),
         name="PV_Uset_rule"
@@ -392,22 +391,30 @@ def build_total_cost(
         T,
         G_p, G_p_cor_abs, P_flow,
         flow_pos_auxi, flow_neg_auxi,
-        G_cost, electricity_price
+        G_cost, electricity_price,
+        optimization_config
 ):
+    second_stage_generation_price_ratio = optimization_config["second_stage_generation_price_ratio"]
+    second_stage_import_price_ratio = optimization_config["second_stage_import_price_ratio"]
+    second_stage_export_price_ratio = optimization_config["second_stage_export_price_ratio"]
+
     total_cost = (
             quicksum(G_p[:, t] for t in range(T)) @ G_cost
-            + quicksum(G_p_cor_abs[:, t] for t in range(T)) @ G_cost * SECOND_STAGE_GENERATION_PRICE_RATIO
+            + quicksum(G_p_cor_abs[:, t] for t in range(T)) @ G_cost * second_stage_generation_price_ratio
             + quicksum(P_flow[0, t] * electricity_price[t] for t in range(T))
-            + quicksum(flow_pos_auxi[t] * electricity_price[t] * SECOND_STAGE_IMPORT_PRICE_RATIO for t in range(T))
-            - quicksum(flow_neg_auxi[t] * electricity_price[t] * SECOND_STAGE_EXPORT_PRICE_RATIO for t in range(T))
+            + quicksum(flow_pos_auxi[t] * electricity_price[t] * second_stage_import_price_ratio for t in range(T))
+            - quicksum(flow_neg_auxi[t] * electricity_price[t] * second_stage_export_price_ratio for t in range(T))
     )
 
     return total_cost
 
 
-def add_budget_constraint(m, total_cost):
+def add_budget_constraint(m, total_cost, optimization_config):
+    budget_base_cost = optimization_config["budget_base_cost"]
+    budget_deviation_ratio = optimization_config["budget_deviation_ratio"]
+
     m.addConstr(
-        total_cost <= BUDGET_BASE_COST * BUDGET_DEVIATION_RATIO,
+        total_cost <= budget_base_cost * budget_deviation_ratio,
         name="Budget_limit"
     )
 
@@ -444,8 +451,12 @@ def solve_and_extract_results(
         P_flow,
         flow_pos_auxi, flow_neg_auxi,
         G_cost, electricity_price,
-        theta_u
+        theta_u, optimization_config
 ):
+    second_stage_generation_price_ratio = optimization_config["second_stage_generation_price_ratio"]
+    second_stage_import_price_ratio = optimization_config["second_stage_import_price_ratio"]
+    second_stage_export_price_ratio = optimization_config["second_stage_export_price_ratio"]
+
     m.optimize()
 
     if m.status != GRB.OPTIMAL:
@@ -453,10 +464,10 @@ def solve_and_extract_results(
 
     total_cost_spent = (
             quicksum(G_p.x[:, t] for t in range(T)) @ G_cost
-            + quicksum(G_p_cor_abs.x[:, t] for t in range(T)) @ G_cost * SECOND_STAGE_GENERATION_PRICE_RATIO
+            + quicksum(G_p_cor_abs.x[:, t] for t in range(T)) @ G_cost * second_stage_generation_price_ratio
             + quicksum(P_flow.x[0, t] * electricity_price[t] for t in range(T))
-            + quicksum(flow_pos_auxi.x[t] * electricity_price[t] * SECOND_STAGE_IMPORT_PRICE_RATIO for t in range(T))
-            - quicksum(flow_neg_auxi.x[t] * electricity_price[t] * SECOND_STAGE_EXPORT_PRICE_RATIO for t in range(T))
+            + quicksum(flow_pos_auxi.x[t] * electricity_price[t] * second_stage_import_price_ratio for t in range(T))
+            - quicksum(flow_neg_auxi.x[t] * electricity_price[t] * second_stage_export_price_ratio for t in range(T))
     )
 
     first_stage_cost = (
@@ -478,9 +489,14 @@ def solve_and_extract_results(
     return optimal_result
 
 
-def economic_dispatch_IGDT(system_data, ders_data, num_nodes, T, P_load_Uset, PV_Uset, iter, partition_num, α_ini):
-## ---------  Parameters --------------
-    A, R_prime, X_prime, P_load = unpack_system_data(system_data)
+def solve_economic_dispatch_igdt(
+        system_data, ders_data, num_nodes, T,
+        P_load_Uset, PV_Uset,
+        iteration, partition_num, alpha_ini,
+        network_config, optimization_config
+):
+# Parameters
+    A, R_prime, X_prime, P_load = unpack_system_data(system_data, optimization_config)
 
     (
         G_node, G_pmax, G_pmin, G_qmax, G_qmin,
@@ -490,26 +506,28 @@ def economic_dispatch_IGDT(system_data, ders_data, num_nodes, T, P_load_Uset, PV
         ESS_node, ESS_pmax, ESS_capacity, ESS_Eini, ESS_eff
     ) = unpack_ders_data(ders_data, T)
 
-    num_nodes, v0, v_up, v_low, P_flow_up, P_flow_low = build_opt_model_limits(num_nodes)
+    num_non_slack_nodes, v0, v_up, v_low, P_flow_up, P_flow_low = build_opt_model_limits(
+        num_nodes, network_config, optimization_config
+    )
 
 
-## ---------  Decision Variables --------------
+# Decision variables
     m = create_opt_model()
 
     G_p, G_q, G_p_cor, G_p_cor_abs, G_p_reg = create_generator_variables(
-        m, T, G_node, G_pmin, G_pmax, G_qmin, G_qmax
+        m, T, G_node, G_pmin, G_pmax, G_qmin, G_qmax, optimization_config
     )
 
     ESS_pch, ESS_pdis, ESS_E, ESS_u = create_ess_variables(
-        m, T, ESS_node, ESS_pmax, ESS_capacity
+        m, T, ESS_node, ESS_pmax, ESS_capacity, optimization_config
     )
 
     P_flow, P_flow_2S, Q_flow, v, P_net, P_net_2S, Q_net = create_network_variables(
-        m, num_nodes, T, v_low, v_up, P_flow_low, P_flow_up
+        m, num_non_slack_nodes, T, v_low, v_up, P_flow_low, P_flow_up
     )
 
     P_load_real, Q_load, PV_real = create_uncertain_realization_variables(
-        m, num_nodes, T, PV_node
+        m, num_non_slack_nodes, T, PV_node
     )
 
     flow_pos_auxi, flow_neg_auxi, flow_u = create_power_exchange_auxiliary_variables(
@@ -520,7 +538,7 @@ def economic_dispatch_IGDT(system_data, ders_data, num_nodes, T, P_load_Uset, PV
         m, partition_num
     )
 
-## ---------  First-stage constraints --------------
+# First-stage constraints
     add_first_stage_generator_constraints(
         m, T, G_p, G_up_limit, G_dn_limit
     )
@@ -532,14 +550,14 @@ def economic_dispatch_IGDT(system_data, ders_data, num_nodes, T, P_load_Uset, PV
     )
 
     add_first_stage_active_power_balance_constraints(
-        m, num_nodes, T,
+        m, num_non_slack_nodes, T,
         G_node, PV_node, ESS_node,
         P_load, PV,
         G_p, ESS_pdis, ESS_pch,
         P_net, P_flow, A
     )
 
-## ---------  Second-stage constraints --------------
+# Second-stage constraints
     add_second_stage_generator_constraints(
         m, T,
         G_p, G_p_cor, G_p_cor_abs, G_p_reg,
@@ -547,7 +565,7 @@ def economic_dispatch_IGDT(system_data, ders_data, num_nodes, T, P_load_Uset, PV
     )
 
     add_second_stage_net_loads_constraints(
-        m, num_nodes, T,
+        m, num_non_slack_nodes, T,
         G_node, PV_node, ESS_node,
         P_load_real, Q_load, PV_real,
         G_p_reg, G_q,
@@ -562,32 +580,33 @@ def economic_dispatch_IGDT(system_data, ders_data, num_nodes, T, P_load_Uset, PV
         P_net_2S, Q_net, v
     )
 
-##------  Uncertainty set and stuff--------------##
-    ## Partition of objective function
+# Uncertainty set constraints
+    # Partition of objective function
     add_igdt_partition_constraints(
-        m, partition_num, iter, α_ini,
+        m, partition_num, iteration, alpha_ini,
         theta, theta_s, theta_u
     )
 
-    ## Partition of uncertainty set
+    # Partition of uncertainty set
     add_uncertainty_realization_constraints(
-        m, partition_num, iter, α_ini,
+        m, partition_num, iteration, alpha_ini,
         P_load_Uset, PV_Uset,
         P_load_real, Q_load, PV_real,
-        theta_u
+        theta_u, optimization_config
     )
 
-    ## Budget limit
+    # Budget constraint
     total_cost = build_total_cost(
         T,
         G_p, G_p_cor_abs, P_flow,
         flow_pos_auxi, flow_neg_auxi,
-        G_cost, electricity_price
+        G_cost, electricity_price,
+        optimization_config
     )
 
-    add_budget_constraint(m, total_cost)
+    add_budget_constraint(m, total_cost, optimization_config)
 
-    ## Auxiliary constraints
+    # Auxiliary constraints
     add_power_exchange_auxiliary_constraints(
         m, T,
         P_flow, P_flow_2S,
@@ -595,9 +614,8 @@ def economic_dispatch_IGDT(system_data, ders_data, num_nodes, T, P_load_Uset, PV
         P_flow_up
     )
 
-## ---------  Objective function --------------
+# Objective function
     set_igdt_objective(m, theta)
-
 
     optimal_result = solve_and_extract_results(
         m, T,
@@ -606,7 +624,7 @@ def economic_dispatch_IGDT(system_data, ders_data, num_nodes, T, P_load_Uset, PV
         P_flow,
         flow_pos_auxi, flow_neg_auxi,
         G_cost, electricity_price,
-        theta_u
+        theta_u, optimization_config
     )
 
     return optimal_result
