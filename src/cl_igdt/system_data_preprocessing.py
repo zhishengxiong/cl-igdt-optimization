@@ -37,6 +37,11 @@ def build_load_factor(T):
     if T == 1:
         return np.array([1])
 
+    if T > len(LOAD_FACTOR_PROFILE):
+        raise ValueError(
+            f"T={T} exceeds the load factor profile length: {len(LOAD_FACTOR_PROFILE)}"
+        )
+
     return LOAD_FACTOR_PROFILE[:T]
 
 
@@ -49,6 +54,15 @@ def build_reference_voltage_vector(num_nodes, network_config):
 
 
 def read_network_data(network_file):
+    if not network_file.exists():
+        raise FileNotFoundError(f"Network data file not found: {network_file}")
+
+    available_sheets = pd.ExcelFile(network_file).sheet_names
+
+    for sheet in [LINES_SHEET, NODES_SHEET]:
+        if sheet not in available_sheets:
+            raise ValueError(f"Missing sheet '{sheet}' in network data file: {network_file}")
+
     raw_lines = pd.read_excel(network_file, sheet_name=LINES_SHEET)
     raw_nodes = pd.read_excel(network_file, sheet_name=NODES_SHEET)
 

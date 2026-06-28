@@ -17,7 +17,14 @@ FULL_PROBABILITY = 1
 
 def read_historical_demand_data(data_dir, num_nodes):
     demand_data_file = data_dir / f"historical_data_demand_{num_nodes}.xlsx"
+
+    if not demand_data_file.exists():
+        raise FileNotFoundError(f"Historical demand data file not found: {demand_data_file}")
+
     demand_sheets = pd.ExcelFile(demand_data_file).sheet_names
+
+    if not demand_sheets:
+        raise ValueError(f"No sheets found in historical demand data file: {demand_data_file}")
 
     return demand_data_file, demand_sheets
 
@@ -60,6 +67,9 @@ def extract_demand_samples(demand_data_file, sheet):
     for _, row in raw_demand_data.iterrows():
         D[row.iloc[0]] = [round(num, 1) for num in sorted(row.iloc[1:].tolist())]
         D_k[row.iloc[0]] = sorted(set(D[row.iloc[0]]))
+
+    if "t0" not in D:
+        raise ValueError(f"Missing t0 row in demand sheet: {sheet}")
 
     value_counts = {key: Counter(values) for key, values in D.items()}
     sample_counts = {key: list(element.values()) for key, element in value_counts.items()}

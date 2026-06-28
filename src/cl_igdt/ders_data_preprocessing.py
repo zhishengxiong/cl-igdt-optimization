@@ -49,6 +49,23 @@ class DERsData:
 
 
 def read_ders_data(ders_file):
+    if not ders_file.exists():
+        raise FileNotFoundError(f"DERs data file not found: {ders_file}")
+
+    required_sheets = [
+        GENERATORS_SHEET,
+        ESS_SHEET,
+        PRICES_SHEET,
+        PV_LOCATION_SHEET,
+        PV_PREDICTIVE_SHEET,
+    ]
+
+    available_sheets = pd.ExcelFile(ders_file).sheet_names
+
+    for sheet in required_sheets:
+        if sheet not in available_sheets:
+            raise ValueError(f"Missing sheet '{sheet}' in DERs data file: {ders_file}")
+
     raw_generators = pd.read_excel(ders_file, sheet_name=GENERATORS_SHEET)
     raw_ess = pd.read_excel(ders_file, sheet_name=ESS_SHEET)
     raw_prices = pd.read_excel(ders_file, sheet_name=PRICES_SHEET)
@@ -94,6 +111,9 @@ def build_ess_data(raw_ess):
 
 
 def build_price_profile(raw_prices, T):
+    if len(raw_prices) < T:
+        raise ValueError(f"Price profile length {len(raw_prices)} is shorter than T={T}")
+
     electricity_price = np.round(
         raw_prices.loc[:T - 1, PRICE_COLUMN].to_numpy(),
         2,
@@ -103,6 +123,9 @@ def build_price_profile(raw_prices, T):
 
 
 def build_pv_data(raw_pv_location, raw_pv_predictive, T):
+    if len(raw_pv_predictive) < T:
+        raise ValueError(f"PV predictive profile length {len(raw_pv_predictive)} is shorter than T={T}")
+
     PV_node = raw_pv_location[NODE_COLUMN].tolist()
 
     PV = raw_pv_predictive[PV_COLUMN][:T].to_numpy()

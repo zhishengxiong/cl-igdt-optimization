@@ -10,14 +10,30 @@ from cl_igdt import pv_uncertainty_set as pv
 from cl_igdt import system_data_preprocessing as psd
 
 
+REQUIRED_CONFIG_SECTIONS = ["time", "files", "network", "optimization"]
+
+
 def load_config(config_file):
+    if not config_file.exists():
+        raise FileNotFoundError(f"Config file not found: {config_file}")
+
     with open(config_file, "r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
+
+    if config is None:
+        raise ValueError(f"Config file is empty: {config_file}")
+
+    for section in REQUIRED_CONFIG_SECTIONS:
+        if section not in config:
+            raise KeyError(f"Missing config section: {section}")
 
     return config
 
 
 def load_input_data(data_dir, T, num_nodes, config):
+    if not data_dir.exists():
+        raise FileNotFoundError(f"Data directory not found: {data_dir}")
+
     network_file = data_dir / config["files"]["network_file"]
     ders_file = data_dir / config["files"]["ders_file"]
 
@@ -40,6 +56,8 @@ def load_uncertainty_sets(
     load_uncertainty_file = data_dir / f"Bus{num_nodes}_P_load_Uset_{alpha_ini}.npz"
     pv_uncertainty_file = data_dir / f"Bus{num_nodes}_PV_Uset_{alpha_ini}.npz"
 
+    # Uncertainty sets are cached because IDM construction is deterministic
+    # for the same data, partition, iteration, and alpha_ini.
     try:
         with np.load(load_uncertainty_file) as data:
             P_load_Uset = {float(key): data[key] for key in data}
@@ -91,6 +109,9 @@ def solve_optimization_iteration(
         network_config,
         optimization_config,
     )
+
+    if optimal_result is None:
+        raise RuntimeError(f"Optimization failed at iteration {iteration}.")
 
     theta_u = optimal_result.theta_u
 

@@ -20,6 +20,14 @@ FULL_PROBABILITY = 1
 def read_historical_pv_data(data_dir, num_nodes):
     pv_data_file = data_dir / f"historical_data_PV_{num_nodes}.xlsx"
 
+    if not pv_data_file.exists():
+        raise FileNotFoundError(f"Historical PV data file not found: {pv_data_file}")
+
+    available_sheets = pd.ExcelFile(pv_data_file).sheet_names
+
+    if PV_DATA_SHEET not in available_sheets:
+        raise ValueError(f"Missing sheet '{PV_DATA_SHEET}' in historical PV data file: {pv_data_file}")
+
     raw_pv_data = pd.read_excel(pv_data_file, sheet_name=PV_DATA_SHEET)
 
     return raw_pv_data
@@ -61,6 +69,9 @@ def extract_pv_samples(raw_pv_data):
     for _, row in raw_pv_data.iterrows():
         PV[row.iloc[0]] = [round(num, 1) for num in sorted(row.iloc[1:].tolist())]
         PV_k[row.iloc[0]] = sorted(set(PV[row.iloc[0]]))
+
+    if "t0" not in PV:
+        raise ValueError(f"Missing t0 row in sheet: {PV_DATA_SHEET}")
 
     value_counts = {key: Counter(values) for key, values in PV.items()}
     sample_counts = {key: list(element.values()) for key, element in value_counts.items()}
