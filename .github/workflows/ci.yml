@@ -25,6 +25,7 @@ jobs:
       - name: Run Ruff
         run: |
           python -m ruff check .
+          python -m ruff format --check .
 
       - name: Run tests
         run: |
