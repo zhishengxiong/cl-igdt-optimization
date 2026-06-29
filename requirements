@@ -1,0 +1,8 @@
+numpy
+pandas
+scipy
+PyYAML
+openpyxl
+gurobipy
+pytest
+ruff
