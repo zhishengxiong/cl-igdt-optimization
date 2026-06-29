@@ -7,7 +7,7 @@ A Python optimization project for uncertainty-aware energy asset scheduling, bas
 > Sustainable Energy, Grids and Networks, 2026.
 > DOI: 10.1016/j.segan.2026.102289
 
-This repository implements a confidence-level IGDT workflow for uncertainty-aware energy asset scheduling. It includes data preprocessing, uncertainty-set construction, Gurobi optimization, tests, and a reproducible 69-bus demo case.
+This repository implements a confidence-level-based information gap decision theory (CL-IGDT) workflow for uncertainty-aware energy asset scheduling. It includes data preprocessing, uncertainty-set construction, optimization model construction, unit tests, and a reproducible 69-bus demo case.
 
 ## What This Project Shows
 
@@ -16,7 +16,7 @@ This repository implements a confidence-level IGDT workflow for uncertainty-awar
 - Data-driven uncertainty-set construction from historical samples.
 - Base scheduling and corrective recourse decisions.
 - Operational constraints for flexible energy assets and network feasibility.
-- Package-style Python structure with tests and GitHub Actions CI.
+- Package-style Python structure with unit tests and GitHub Actions CI.
 
 ## Repository Structure
 
@@ -47,7 +47,6 @@ cl-igdt-optimization/
 |-- CITATION.cff
 |-- LICENSE
 |-- pyproject.toml
-|-- README.dev.md
 `-- README.md
 ```
 
