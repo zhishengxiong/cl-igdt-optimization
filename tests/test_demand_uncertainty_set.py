@@ -5,9 +5,7 @@ from cl_igdt import demand_uncertainty_set as demand
 
 
 def test_read_historical_demand_data_rejects_missing_file(tmp_path):
-    with pytest.raises(
-        FileNotFoundError, match="Historical demand data file not found"
-    ):
+    with pytest.raises(FileNotFoundError, match="Historical demand data file not found"):
         demand.read_historical_demand_data(tmp_path, num_nodes=3)
 
 

@@ -38,9 +38,7 @@ def test_read_network_data_rejects_missing_file(tmp_path):
 def test_read_network_data_rejects_missing_sheet(tmp_path):
     network_file = tmp_path / "network.xlsx"
     with pd.ExcelWriter(network_file) as writer:
-        pd.DataFrame({"x": [1]}).to_excel(
-            writer, sheet_name=psd.LINES_SHEET, index=False
-        )
+        pd.DataFrame({"x": [1]}).to_excel(writer, sheet_name=psd.LINES_SHEET, index=False)
 
     with pytest.raises(ValueError, match="Missing sheet 'Nodes'"):
         psd.read_network_data(network_file)

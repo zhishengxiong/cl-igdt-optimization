@@ -11,7 +11,6 @@ import pandas as pd
 from scipy.interpolate import interp1d
 from scipy.stats import beta
 
-
 IDM_CONFIDENCE_LEVEL = 0.95
 IDM_EQUIVALENT_SAMPLE_SIZE = 1
 
@@ -25,16 +24,12 @@ def read_historical_demand_data(data_dir, num_nodes):
     demand_data_file = data_dir / f"historical_data_demand_{num_nodes}.xlsx"
 
     if not demand_data_file.exists():
-        raise FileNotFoundError(
-            f"Historical demand data file not found: {demand_data_file}"
-        )
+        raise FileNotFoundError(f"Historical demand data file not found: {demand_data_file}")
 
     demand_sheets = pd.ExcelFile(demand_data_file).sheet_names
 
     if not demand_sheets:
-        raise ValueError(
-            f"No sheets found in historical demand data file: {demand_data_file}"
-        )
+        raise ValueError(f"No sheets found in historical demand data file: {demand_data_file}")
 
     return demand_data_file, demand_sheets
 
@@ -50,9 +45,7 @@ def build_idm_parameters():
 
 def initialize_load_uncertainty_set(partition_num, iteration, alpha_ini, nodes, T):
     P_load_Uset = {
-        round(10 ** (-iteration) * partition + alpha_ini, iteration): np.zeros(
-            (nodes, T)
-        )
+        round(10 ** (-iteration) * partition + alpha_ini, iteration): np.zeros((nodes, T))
         for partition in range(partition_num)
     }
 
@@ -84,9 +77,7 @@ def extract_demand_samples(demand_data_file, sheet):
         raise ValueError(f"Missing t0 row in demand sheet: {sheet}")
 
     value_counts = {key: Counter(values) for key, values in D.items()}
-    sample_counts = {
-        key: list(element.values()) for key, element in value_counts.items()
-    }
+    sample_counts = {key: list(element.values()) for key, element in value_counts.items()}
 
     n_k = {key: cumulative_sum(values) for key, values in sample_counts.items()}
     n = len(D["t0"])
@@ -107,27 +98,19 @@ def build_idm_interpolated_cdf(D_k, n_k, n, confidence_lower, confidence_upper, 
             D_min_new = round(D_k[t][0] * DEMAND_LOWER_EXTENSION_RATIO, 2)
             D_k[t].insert(0, max(ZERO_VALUE, D_min_new))
 
-            icdf_lower[t] = [
-                beta.ppf(confidence_lower, i, s + n - i) for i in n_k_values
-            ]
+            icdf_lower[t] = [beta.ppf(confidence_lower, i, s + n - i) for i in n_k_values]
             icdf_lower[t].insert(0, ZERO_VALUE)
 
             n_k_values = n_k_values[:-1]
             n_k_values.insert(0, ZERO_VALUE)
-            icdf_upper[t] = [
-                beta.ppf(confidence_upper, s + i, n - i) for i in n_k_values
-            ]
+            icdf_upper[t] = [beta.ppf(confidence_upper, s + i, n - i) for i in n_k_values]
             icdf_upper[t].append(FULL_PROBABILITY)
 
         elif D_k[t][-1] > ZERO_VALUE:
-            icdf_lower[t] = [
-                beta.ppf(confidence_lower, i, s + n - i) for i in n_k_values
-            ]
+            icdf_lower[t] = [beta.ppf(confidence_lower, i, s + n - i) for i in n_k_values]
 
             n_k_values = n_k_values[:-1]
-            icdf_upper[t] = [
-                beta.ppf(confidence_upper, s + i, n - i) for i in n_k_values
-            ]
+            icdf_upper[t] = [beta.ppf(confidence_upper, s + i, n - i) for i in n_k_values]
             icdf_upper[t].append(FULL_PROBABILITY)
 
         else:
@@ -162,9 +145,7 @@ def initialize_confidence_interval(confidence_level, confidence_interval, T):
     return confidence_interval
 
 
-def find_shortest_load_interval(
-    values, cum_probs_lower, cum_probs_upper, confidence_level
-):
+def find_shortest_load_interval(values, cum_probs_lower, cum_probs_upper, confidence_level):
     prob_densities_upper = np.diff(cum_probs_upper) / np.diff(values)
     prob_densities_upper = np.insert(prob_densities_upper, 0, cum_probs_upper[0])
 
@@ -210,9 +191,7 @@ def build_shortest_load_confidence_intervals(
         cum_probs_upper = final_icdf_upper[t]
 
         for partition in range(partition_num):
-            confidence_level = round(
-                10 ** (-iteration) * partition + alpha_ini, iteration
-            )
+            confidence_level = round(10 ** (-iteration) * partition + alpha_ini, iteration)
 
             confidence_interval = initialize_confidence_interval(
                 confidence_level, confidence_interval, T
@@ -222,9 +201,7 @@ def build_shortest_load_confidence_intervals(
                 values, cum_probs_lower, cum_probs_upper, confidence_level
             )
 
-            P_load_Uset[confidence_level][node_index, int(t[1:])] = -round(
-                shortest_interval[1], 2
-            )
+            P_load_Uset[confidence_level][node_index, int(t[1:])] = -round(shortest_interval[1], 2)
             confidence_interval[confidence_level][t] = shortest_interval
 
     return P_load_Uset, confidence_interval
@@ -257,9 +234,7 @@ def build_demand_uncertainty_set(
 
     confidence_lower, confidence_upper, s = build_idm_parameters()
 
-    P_load_Uset = initialize_load_uncertainty_set(
-        partition_num, iteration, alpha_ini, nodes, T
-    )
+    P_load_Uset = initialize_load_uncertainty_set(partition_num, iteration, alpha_ini, nodes, T)
 
     for sheet in demand_sheets:
         node_index = demand_sheets.index(sheet)

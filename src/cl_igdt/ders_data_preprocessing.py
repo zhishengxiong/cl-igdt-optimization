@@ -9,7 +9,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-
 GENERATORS_SHEET = "Generators"
 ESS_SHEET = "ESS"
 PRICES_SHEET = "Prices"
@@ -118,9 +117,7 @@ def build_ess_data(raw_ess):
 
 def build_price_profile(raw_prices, T):
     if len(raw_prices) < T:
-        raise ValueError(
-            f"Price profile length {len(raw_prices)} is shorter than T={T}"
-        )
+        raise ValueError(f"Price profile length {len(raw_prices)} is shorter than T={T}")
 
     electricity_price = np.round(
         raw_prices.loc[: T - 1, PRICE_COLUMN].to_numpy(),

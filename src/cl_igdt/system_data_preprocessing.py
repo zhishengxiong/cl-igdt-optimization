@@ -9,7 +9,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-
 LINES_SHEET = "Lines"
 NODES_SHEET = "Nodes"
 
@@ -89,9 +88,7 @@ def read_network_data(network_file):
 
     for sheet in [LINES_SHEET, NODES_SHEET]:
         if sheet not in available_sheets:
-            raise ValueError(
-                f"Missing sheet '{sheet}' in network data file: {network_file}"
-            )
+            raise ValueError(f"Missing sheet '{sheet}' in network data file: {network_file}")
 
     raw_lines = pd.read_excel(network_file, sheet_name=LINES_SHEET)
     raw_nodes = pd.read_excel(network_file, sheet_name=NODES_SHEET)

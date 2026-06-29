@@ -11,7 +11,6 @@ import pandas as pd
 from scipy.interpolate import interp1d
 from scipy.stats import beta
 
-
 PV_DATA_SHEET = "PVData"
 
 IDM_CONFIDENCE_LEVEL = 0.95
@@ -82,9 +81,7 @@ def extract_pv_samples(raw_pv_data):
         raise ValueError(f"Missing t0 row in sheet: {PV_DATA_SHEET}")
 
     value_counts = {key: Counter(values) for key, values in PV.items()}
-    sample_counts = {
-        key: list(element.values()) for key, element in value_counts.items()
-    }
+    sample_counts = {key: list(element.values()) for key, element in value_counts.items()}
 
     n_k = {key: cumulative_sum(values) for key, values in sample_counts.items()}
     n = len(PV["t0"])
@@ -106,27 +103,19 @@ def build_idm_interpolated_cdf(PV_k, n_k, n, confidence_lower, confidence_upper,
             PV_min_new = round(PV_k[t][0] - PV_min, 1)
             PV_k[t].insert(0, max(ZERO_VALUE, PV_min_new))
 
-            icdf_lower[t] = [
-                beta.ppf(confidence_lower, i, s + n - i) for i in n_k_values
-            ]
+            icdf_lower[t] = [beta.ppf(confidence_lower, i, s + n - i) for i in n_k_values]
             icdf_lower[t].insert(0, ZERO_VALUE)
 
             n_k_values = n_k_values[:-1]
             n_k_values.insert(0, ZERO_VALUE)
-            icdf_upper[t] = [
-                beta.ppf(confidence_upper, s + i, n - i) for i in n_k_values
-            ]
+            icdf_upper[t] = [beta.ppf(confidence_upper, s + i, n - i) for i in n_k_values]
             icdf_upper[t].append(FULL_PROBABILITY)
 
         elif PV_k[t][-1] > ZERO_VALUE:
-            icdf_lower[t] = [
-                beta.ppf(confidence_lower, i, s + n - i) for i in n_k_values
-            ]
+            icdf_lower[t] = [beta.ppf(confidence_lower, i, s + n - i) for i in n_k_values]
 
             n_k_values = n_k_values[:-1]
-            icdf_upper[t] = [
-                beta.ppf(confidence_upper, s + i, n - i) for i in n_k_values
-            ]
+            icdf_upper[t] = [beta.ppf(confidence_upper, s + i, n - i) for i in n_k_values]
             icdf_upper[t].append(FULL_PROBABILITY)
 
         else:
@@ -161,9 +150,7 @@ def initialize_confidence_interval(confidence_level, confidence_interval, T):
     return confidence_interval
 
 
-def find_shortest_pv_interval(
-    values, cum_probs_lower, cum_probs_upper, confidence_level
-):
+def find_shortest_pv_interval(values, cum_probs_lower, cum_probs_upper, confidence_level):
     prob_densities = np.diff(cum_probs_upper) / np.diff(values)
     prob_densities = np.insert(prob_densities, 0, cum_probs_upper[0])
 
@@ -214,9 +201,7 @@ def build_shortest_pv_confidence_intervals(
         cum_probs_upper = np.array(final_icdf_upper[t])
 
         for partition in range(partition_num):
-            confidence_level = round(
-                10 ** (-iteration) * partition + alpha_ini, iteration
-            )
+            confidence_level = round(10 ** (-iteration) * partition + alpha_ini, iteration)
 
             confidence_interval = initialize_confidence_interval(
                 confidence_level, confidence_interval, T
@@ -241,9 +226,7 @@ def tile_pv_uncertainty_set(pv_uset, partition_num, iteration, alpha_ini, num_pv
     return pv_uset
 
 
-def print_pv_confidence_intervals(
-    partition_num, iteration, alpha_ini, confidence_interval
-):
+def print_pv_confidence_intervals(partition_num, iteration, alpha_ini, confidence_interval):
     for partition in range(partition_num):
         confidence_level = round(10 ** (-iteration) * partition + alpha_ini, iteration)
         print(
@@ -284,14 +267,10 @@ def build_pv_uncertainty_set(
         T,
     )
 
-    pv_uset = tile_pv_uncertainty_set(
-        pv_uset, partition_num, iteration, alpha_ini, num_pv
-    )
+    pv_uset = tile_pv_uncertainty_set(pv_uset, partition_num, iteration, alpha_ini, num_pv)
 
     if verbose:
-        print_pv_confidence_intervals(
-            partition_num, iteration, alpha_ini, confidence_interval
-        )
+        print_pv_confidence_intervals(partition_num, iteration, alpha_ini, confidence_interval)
 
     save_pv_uncertainty_set(pv_uset, data_dir, num_nodes, alpha_ini)
 

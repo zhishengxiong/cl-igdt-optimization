@@ -8,13 +8,11 @@ IDM-based uncertainty-set construction, and iterative economic dispatch solving.
 import numpy as np
 import yaml
 
-
 from cl_igdt import demand_uncertainty_set as demand
 from cl_igdt import ders_data_preprocessing as pder
 from cl_igdt import economic_dispatch_igdt as ed
 from cl_igdt import pv_uncertainty_set as pv
 from cl_igdt import system_data_preprocessing as psd
-
 
 REQUIRED_CONFIG_SECTIONS = ["time", "files", "network", "optimization"]
 
@@ -55,9 +53,7 @@ def load_input_data(data_dir, T, num_nodes, config):
     return system_data, ders_data
 
 
-def load_uncertainty_sets(
-    data_dir, num_nodes, iteration, partition_num, T, alpha_ini, num_pv
-):
+def load_uncertainty_sets(data_dir, num_nodes, iteration, partition_num, T, alpha_ini, num_pv):
     load_uncertainty_file = data_dir / f"Bus{num_nodes}_P_load_Uset_{alpha_ini}.npz"
     pv_uncertainty_file = data_dir / f"Bus{num_nodes}_PV_Uset_{alpha_ini}.npz"
 
