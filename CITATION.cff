@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "CL-IGDT Optimization"
+type: software
+
+authors:
+  - family-names: Xiong
+    given-names: Zhisheng
+
+version: 0.1.0
+date-released: 2026-06-29
+
+repository-code: "https://github.com/zhishengxiong/cl-igdt-optimization"
+
+preferred-citation:
+  type: article
+  title: "Optimal operation of distribution networks under asymmetric renewable energy and load demand uncertainties"
+  authors:
+    - family-names: Xiong
+      given-names: Zhisheng
+    - family-names: Zeng
+      given-names: Bo
+    - family-names: Palensky
+      given-names: Peter
+    - family-names: Vergara
+      given-names: Pedro P.
+  journal: "Sustainable Energy, Grids and Networks"
+  year: 2026
+  doi: "10.1016/j.segan.2026.102289"
