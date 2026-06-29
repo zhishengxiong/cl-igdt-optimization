@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cl-igdt-optimization"
+version = "0.1.0"
+description = "CL-IGDT optimization for distribution network economic dispatch under demand and PV uncertainty."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Zhisheng Xiong" }
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "PyYAML",
+    "openpyxl",
+    "gurobipy",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
