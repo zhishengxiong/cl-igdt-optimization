@@ -1,3 +1,10 @@
+"""Construct IDM-based demand uncertainty sets.
+
+The generated uncertainty sets are indexed by confidence level and cached
+as NPZ files so repeated cases can reuse them.
+"""
+
+
 from collections import Counter
 
 import numpy as np

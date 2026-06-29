@@ -1,3 +1,10 @@
+"""Build network data for the optimization model.
+
+This module converts network inputs into incidence matrices,
+network parameter matrices, and time-dependent load profiles.
+"""
+
+
 from dataclasses import dataclass
 
 import numpy as np

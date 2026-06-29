@@ -1,3 +1,10 @@
+"""Construct IDM-based PV uncertainty sets.
+
+The PV uncertainty profile is first built for one PV pattern and then
+replicated across PV units according to their locations.
+"""
+
+
 from collections import Counter
 
 import numpy as np

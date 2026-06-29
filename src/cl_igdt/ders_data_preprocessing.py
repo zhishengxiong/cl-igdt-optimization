@@ -1,3 +1,10 @@
+"""Build DERs and electricity price data for the optimization model.
+
+The input file follows the original research data schema.
+Some column names are kept unchanged for reproducibility.
+"""
+
+
 from dataclasses import dataclass
 
 import numpy as np

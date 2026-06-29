@@ -1,3 +1,10 @@
+"""Formulate and solve the CL-IGDT economic dispatch model.
+
+The model includes first-stage decisions, second-stage recourse decisions,
+network constraints, uncertainty realization constraints, and the IGDT objective.
+"""
+
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -16,7 +23,7 @@ class OptimalResult:
     P_flow: np.ndarray
 
 
-def unpack_system_data(system_data, optimization_config):
+def unpack_system_data(system_data):
     A = system_data.A
     R_prime = system_data.R_prime * 0.001
     X_prime = system_data.X_prime * 0.001
@@ -495,8 +502,10 @@ def solve_economic_dispatch_igdt(
         iteration, partition_num, alpha_ini,
         network_config, optimization_config
 ):
-# Parameters
-    A, R_prime, X_prime, P_load = unpack_system_data(system_data, optimization_config)
+    """Solve optimization model for the current alpha step."""
+
+    # Parameters
+    A, R_prime, X_prime, P_load = unpack_system_data(system_data)
 
     (
         G_node, G_pmax, G_pmin, G_qmax, G_qmin,
@@ -511,7 +520,7 @@ def solve_economic_dispatch_igdt(
     )
 
 
-# Decision variables
+    # Decision variables
     m = create_opt_model()
 
     G_p, G_q, G_p_cor, G_p_cor_abs, G_p_reg = create_generator_variables(
@@ -538,7 +547,7 @@ def solve_economic_dispatch_igdt(
         m, partition_num
     )
 
-# First-stage constraints
+    # First-stage constraints
     add_first_stage_generator_constraints(
         m, T, G_p, G_up_limit, G_dn_limit
     )
@@ -557,7 +566,7 @@ def solve_economic_dispatch_igdt(
         P_net, P_flow, A
     )
 
-# Second-stage constraints
+    # Second-stage constraints
     add_second_stage_generator_constraints(
         m, T,
         G_p, G_p_cor, G_p_cor_abs, G_p_reg,
@@ -580,7 +589,7 @@ def solve_economic_dispatch_igdt(
         P_net_2S, Q_net, v
     )
 
-# Uncertainty set constraints
+    # Uncertainty set constraints
     # Partition of objective function
     add_igdt_partition_constraints(
         m, partition_num, iteration, alpha_ini,
@@ -614,7 +623,7 @@ def solve_economic_dispatch_igdt(
         P_flow_up
     )
 
-# Objective function
+    # Objective function
     set_igdt_objective(m, theta)
 
     optimal_result = solve_and_extract_results(

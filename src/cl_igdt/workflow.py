@@ -1,3 +1,14 @@
+"""
+Coordinate the full CL-IGDT workflow.
+
+This module connects configuration loading, data preprocessing,
+IDM-based uncertainty-set construction, and iterative economic dispatch solving.
+"""
+
+from pathlib import Path
+
+import numpy as np
+import yaml
 from pathlib import Path
 
 import numpy as np
@@ -125,6 +136,7 @@ def solve_optimization_iteration(
 
 
 def run_case(project_root):
+    """Run one configured CL-IGDT case and return the optimal alpha."""
     data_dir = project_root / "data"
     config_file = project_root / "configs" / "config.yaml"
 
@@ -173,6 +185,7 @@ def run_case(project_root):
             optimization_config,
         )
 
-        print(f"The suboptimal confidence level of iteration {iteration} is: {alpha_ini}")
+        print(f"The optimal confidence level of iteration {iteration} is: {alpha_ini}")
 
-    return alpha_ini
+    alpha = alpha_ini
+    return alpha
