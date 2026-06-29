@@ -4,7 +4,6 @@ The PV uncertainty profile is first built for one PV pattern and then
 replicated across PV units according to their locations.
 """
 
-
 from collections import Counter
 
 import numpy as np
@@ -33,7 +32,9 @@ def read_historical_pv_data(data_dir, num_nodes):
     available_sheets = pd.ExcelFile(pv_data_file).sheet_names
 
     if PV_DATA_SHEET not in available_sheets:
-        raise ValueError(f"Missing sheet '{PV_DATA_SHEET}' in historical PV data file: {pv_data_file}")
+        raise ValueError(
+            f"Missing sheet '{PV_DATA_SHEET}' in historical PV data file: {pv_data_file}"
+        )
 
     raw_pv_data = pd.read_excel(pv_data_file, sheet_name=PV_DATA_SHEET)
 
@@ -81,7 +82,9 @@ def extract_pv_samples(raw_pv_data):
         raise ValueError(f"Missing t0 row in sheet: {PV_DATA_SHEET}")
 
     value_counts = {key: Counter(values) for key, values in PV.items()}
-    sample_counts = {key: list(element.values()) for key, element in value_counts.items()}
+    sample_counts = {
+        key: list(element.values()) for key, element in value_counts.items()
+    }
 
     n_k = {key: cumulative_sum(values) for key, values in sample_counts.items()}
     n = len(PV["t0"])
@@ -104,29 +107,25 @@ def build_idm_interpolated_cdf(PV_k, n_k, n, confidence_lower, confidence_upper,
             PV_k[t].insert(0, max(ZERO_VALUE, PV_min_new))
 
             icdf_lower[t] = [
-                beta.ppf(confidence_lower, i, s + n - i)
-                for i in n_k_values
+                beta.ppf(confidence_lower, i, s + n - i) for i in n_k_values
             ]
             icdf_lower[t].insert(0, ZERO_VALUE)
 
             n_k_values = n_k_values[:-1]
             n_k_values.insert(0, ZERO_VALUE)
             icdf_upper[t] = [
-                beta.ppf(confidence_upper, s + i, n - i)
-                for i in n_k_values
+                beta.ppf(confidence_upper, s + i, n - i) for i in n_k_values
             ]
             icdf_upper[t].append(FULL_PROBABILITY)
 
         elif PV_k[t][-1] > ZERO_VALUE:
             icdf_lower[t] = [
-                beta.ppf(confidence_lower, i, s + n - i)
-                for i in n_k_values
+                beta.ppf(confidence_lower, i, s + n - i) for i in n_k_values
             ]
 
             n_k_values = n_k_values[:-1]
             icdf_upper[t] = [
-                beta.ppf(confidence_upper, s + i, n - i)
-                for i in n_k_values
+                beta.ppf(confidence_upper, s + i, n - i) for i in n_k_values
             ]
             icdf_upper[t].append(FULL_PROBABILITY)
 
@@ -138,10 +137,7 @@ def build_idm_interpolated_cdf(PV_k, n_k, n, confidence_lower, confidence_upper,
             f_inter_lower = interp1d(PV_k[t], icdf_lower[t], kind=INTERPOLATION_KIND)
             f_inter_upper = interp1d(PV_k[t], icdf_upper[t], kind=INTERPOLATION_KIND)
 
-            x_z = [
-                (PV_k[t][i] + PV_k[t][i + 1]) * 0.5
-                for i in range(len(PV_k[t]) - 1)
-            ]
+            x_z = [(PV_k[t][i] + PV_k[t][i + 1]) * 0.5 for i in range(len(PV_k[t]) - 1)]
             x_z = [round(num, 2) for num in x_z]
 
             final_PV_k[t] = sorted(PV_k[t] + x_z)
@@ -165,7 +161,9 @@ def initialize_confidence_interval(confidence_level, confidence_interval, T):
     return confidence_interval
 
 
-def find_shortest_pv_interval(values, cum_probs_lower, cum_probs_upper, confidence_level):
+def find_shortest_pv_interval(
+    values, cum_probs_lower, cum_probs_upper, confidence_level
+):
     prob_densities = np.diff(cum_probs_upper) / np.diff(values)
     prob_densities = np.insert(prob_densities, 0, cum_probs_upper[0])
 
@@ -199,9 +197,14 @@ def find_shortest_pv_interval(values, cum_probs_lower, cum_probs_upper, confiden
 
 
 def build_shortest_pv_confidence_intervals(
-        final_PV_k, final_icdf_lower, final_icdf_upper,
-        partition_num, iteration, alpha_ini,
-        pv_uset, T
+    final_PV_k,
+    final_icdf_lower,
+    final_icdf_upper,
+    partition_num,
+    iteration,
+    alpha_ini,
+    pv_uset,
+    T,
 ):
     confidence_interval = {}
 
@@ -211,7 +214,9 @@ def build_shortest_pv_confidence_intervals(
         cum_probs_upper = np.array(final_icdf_upper[t])
 
         for partition in range(partition_num):
-            confidence_level = round(10 ** (-iteration) * partition + alpha_ini, iteration)
+            confidence_level = round(
+                10 ** (-iteration) * partition + alpha_ini, iteration
+            )
 
             confidence_interval = initialize_confidence_interval(
                 confidence_level, confidence_interval, T
@@ -236,7 +241,9 @@ def tile_pv_uncertainty_set(pv_uset, partition_num, iteration, alpha_ini, num_pv
     return pv_uset
 
 
-def print_pv_confidence_intervals(partition_num, iteration, alpha_ini, confidence_interval):
+def print_pv_confidence_intervals(
+    partition_num, iteration, alpha_ini, confidence_interval
+):
     for partition in range(partition_num):
         confidence_level = round(10 ** (-iteration) * partition + alpha_ini, iteration)
         print(
@@ -248,35 +255,33 @@ def print_pv_confidence_intervals(partition_num, iteration, alpha_ini, confidenc
 def save_pv_uncertainty_set(pv_uset, data_dir, num_nodes, alpha_ini):
     output_file = data_dir / f"Bus{num_nodes}_PV_Uset_{alpha_ini}.npz"
 
-    np.savez(
-        output_file,
-        **{str(key): value for key, value in pv_uset.items()}
-    )
+    np.savez(output_file, **{str(key): value for key, value in pv_uset.items()})
 
 
 def build_pv_uncertainty_set(
-        data_dir, num_nodes, iteration, partition_num, T, alpha_ini, num_pv,
-        verbose=False
+    data_dir, num_nodes, iteration, partition_num, T, alpha_ini, num_pv, verbose=False
 ):
     raw_pv_data = read_historical_pv_data(data_dir, num_nodes)
 
     confidence_lower, confidence_upper, s = build_idm_parameters()
 
-    pv_uset = initialize_pv_uncertainty_set(
-        partition_num, iteration, alpha_ini, T
-    )
+    pv_uset = initialize_pv_uncertainty_set(partition_num, iteration, alpha_ini, T)
 
     PV, PV_k, n_k, n = extract_pv_samples(raw_pv_data)
 
     final_PV_k, final_icdf_lower, final_icdf_upper = build_idm_interpolated_cdf(
-        PV_k, n_k, n,
-        confidence_lower, confidence_upper, s
+        PV_k, n_k, n, confidence_lower, confidence_upper, s
     )
 
     pv_uset, confidence_interval = build_shortest_pv_confidence_intervals(
-        final_PV_k, final_icdf_lower, final_icdf_upper,
-        partition_num, iteration, alpha_ini,
-        pv_uset, T
+        final_PV_k,
+        final_icdf_lower,
+        final_icdf_upper,
+        partition_num,
+        iteration,
+        alpha_ini,
+        pv_uset,
+        T,
     )
 
     pv_uset = tile_pv_uncertainty_set(

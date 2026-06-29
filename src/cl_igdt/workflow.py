@@ -5,14 +5,9 @@ This module connects configuration loading, data preprocessing,
 IDM-based uncertainty-set construction, and iterative economic dispatch solving.
 """
 
-from pathlib import Path
-
 import numpy as np
 import yaml
-from pathlib import Path
 
-import numpy as np
-import yaml
 
 from cl_igdt import demand_uncertainty_set as demand
 from cl_igdt import ders_data_preprocessing as pder
@@ -61,8 +56,7 @@ def load_input_data(data_dir, T, num_nodes, config):
 
 
 def load_uncertainty_sets(
-        data_dir, num_nodes, iteration, partition_num,
-        T, alpha_ini, num_pv
+    data_dir, num_nodes, iteration, partition_num, T, alpha_ini, num_pv
 ):
     load_uncertainty_file = data_dir / f"Bus{num_nodes}_P_load_Uset_{alpha_ini}.npz"
     pv_uncertainty_file = data_dir / f"Bus{num_nodes}_PV_Uset_{alpha_ini}.npz"
@@ -102,10 +96,18 @@ def load_uncertainty_sets(
 
 
 def solve_optimization_iteration(
-        system_data, ders_data, num_nodes, T,
-        P_load_Uset, PV_Uset,
-        iteration, partition_num, alpha_ini, accuracy,
-        network_config, optimization_config
+    system_data,
+    ders_data,
+    num_nodes,
+    T,
+    P_load_Uset,
+    PV_Uset,
+    iteration,
+    partition_num,
+    alpha_ini,
+    accuracy,
+    network_config,
+    optimization_config,
 ):
     optimal_result = ed.solve_economic_dispatch_igdt(
         system_data,

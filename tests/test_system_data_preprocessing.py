@@ -38,7 +38,9 @@ def test_read_network_data_rejects_missing_file(tmp_path):
 def test_read_network_data_rejects_missing_sheet(tmp_path):
     network_file = tmp_path / "network.xlsx"
     with pd.ExcelWriter(network_file) as writer:
-        pd.DataFrame({"x": [1]}).to_excel(writer, sheet_name=psd.LINES_SHEET, index=False)
+        pd.DataFrame({"x": [1]}).to_excel(
+            writer, sheet_name=psd.LINES_SHEET, index=False
+        )
 
     with pytest.raises(ValueError, match="Missing sheet 'Nodes'"):
         psd.read_network_data(network_file)
@@ -47,16 +49,20 @@ def test_read_network_data_rejects_missing_sheet(tmp_path):
 def test_build_system_data_for_three_bus_radial_network(tmp_path):
     network_file = tmp_path / "network.xlsx"
 
-    raw_lines = pd.DataFrame({
-        psd.FROM_COLUMN: [1, 2],
-        psd.TO_COLUMN: [2, 3],
-        psd.R_COLUMN: [0.1, 0.2],
-        psd.X_COLUMN: [0.01, 0.02],
-    })
-    raw_nodes = pd.DataFrame({
-        psd.PD_COLUMN: [0.0, 10.0, 20.0],
-        psd.QD_COLUMN: [0.0, 1.0, 2.0],
-    })
+    raw_lines = pd.DataFrame(
+        {
+            psd.FROM_COLUMN: [1, 2],
+            psd.TO_COLUMN: [2, 3],
+            psd.R_COLUMN: [0.1, 0.2],
+            psd.X_COLUMN: [0.01, 0.02],
+        }
+    )
+    raw_nodes = pd.DataFrame(
+        {
+            psd.PD_COLUMN: [0.0, 10.0, 20.0],
+            psd.QD_COLUMN: [0.0, 1.0, 2.0],
+        }
+    )
 
     with pd.ExcelWriter(network_file) as writer:
         raw_lines.to_excel(writer, sheet_name=psd.LINES_SHEET, index=False)

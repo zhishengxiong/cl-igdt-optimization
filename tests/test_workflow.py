@@ -62,7 +62,9 @@ def test_solve_optimization_iteration_rejects_failed_optimization(monkeypatch):
     def fake_solve_economic_dispatch_igdt(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(workflow.ed, "solve_economic_dispatch_igdt", fake_solve_economic_dispatch_igdt)
+    monkeypatch.setattr(
+        workflow.ed, "solve_economic_dispatch_igdt", fake_solve_economic_dispatch_igdt
+    )
 
     with pytest.raises(RuntimeError, match="Optimization failed at iteration 1"):
         workflow.solve_optimization_iteration(
@@ -85,7 +87,9 @@ def test_solve_optimization_iteration_updates_alpha(monkeypatch):
     def fake_solve_economic_dispatch_igdt(*args, **kwargs):
         return SimpleNamespace(theta_u=np.array([0, 0, 1, 0]))
 
-    monkeypatch.setattr(workflow.ed, "solve_economic_dispatch_igdt", fake_solve_economic_dispatch_igdt)
+    monkeypatch.setattr(
+        workflow.ed, "solve_economic_dispatch_igdt", fake_solve_economic_dispatch_igdt
+    )
 
     alpha = workflow.solve_optimization_iteration(
         system_data=None,

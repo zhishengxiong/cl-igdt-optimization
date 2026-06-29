@@ -4,7 +4,6 @@ The input file follows the original research data schema.
 Some column names are kept unchanged for reproducibility.
 """
 
-
 from dataclasses import dataclass
 
 import numpy as np
@@ -119,10 +118,12 @@ def build_ess_data(raw_ess):
 
 def build_price_profile(raw_prices, T):
     if len(raw_prices) < T:
-        raise ValueError(f"Price profile length {len(raw_prices)} is shorter than T={T}")
+        raise ValueError(
+            f"Price profile length {len(raw_prices)} is shorter than T={T}"
+        )
 
     electricity_price = np.round(
-        raw_prices.loc[:T - 1, PRICE_COLUMN].to_numpy(),
+        raw_prices.loc[: T - 1, PRICE_COLUMN].to_numpy(),
         2,
     )
 
@@ -131,7 +132,9 @@ def build_price_profile(raw_prices, T):
 
 def build_pv_data(raw_pv_location, raw_pv_predictive, T):
     if len(raw_pv_predictive) < T:
-        raise ValueError(f"PV predictive profile length {len(raw_pv_predictive)} is shorter than T={T}")
+        raise ValueError(
+            f"PV predictive profile length {len(raw_pv_predictive)} is shorter than T={T}"
+        )
 
     PV_node = raw_pv_location[NODE_COLUMN].tolist()
 

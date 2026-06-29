@@ -4,7 +4,6 @@ This module converts network inputs into incidence matrices,
 network parameter matrices, and time-dependent load profiles.
 """
 
-
 from dataclasses import dataclass
 
 import numpy as np
@@ -22,12 +21,34 @@ X_COLUMN = "X"
 PD_COLUMN = "PD"
 QD_COLUMN = "QD"
 
-LOAD_FACTOR_PROFILE = np.array([
-    0.75, 0.73, 0.72, 0.76, 0.77, 0.78,
-    0.8, 1.1, 1.25, 1.24, 1.23, 1.3,
-    1.23, 1.19, 1.2, 1.21, 1.18, 1.17,
-    1.1, 1.0, 0.9, 0.95, 0.8, 0.76,
-])
+LOAD_FACTOR_PROFILE = np.array(
+    [
+        0.75,
+        0.73,
+        0.72,
+        0.76,
+        0.77,
+        0.78,
+        0.8,
+        1.1,
+        1.25,
+        1.24,
+        1.23,
+        1.3,
+        1.23,
+        1.19,
+        1.2,
+        1.21,
+        1.18,
+        1.17,
+        1.1,
+        1.0,
+        0.9,
+        0.95,
+        0.8,
+        0.76,
+    ]
+)
 
 
 @dataclass
@@ -68,7 +89,9 @@ def read_network_data(network_file):
 
     for sheet in [LINES_SHEET, NODES_SHEET]:
         if sheet not in available_sheets:
-            raise ValueError(f"Missing sheet '{sheet}' in network data file: {network_file}")
+            raise ValueError(
+                f"Missing sheet '{sheet}' in network data file: {network_file}"
+            )
 
     raw_lines = pd.read_excel(network_file, sheet_name=LINES_SHEET)
     raw_nodes = pd.read_excel(network_file, sheet_name=NODES_SHEET)
